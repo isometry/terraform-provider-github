@@ -5,39 +5,74 @@ import (
 	"fmt"
 
 	"github.com/google/go-github/v74/github"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-func dataSourceGithubIssueLabels() *schema.Resource {
-	return &schema.Resource{
-		Description: "Get the labels for a given repository.",
-		Read:        dataSourceGithubIssueLabelsRead,
+var (
+	_ datasource.DataSource              = &githubIssueLabelsDataSource{}
+	_ datasource.DataSourceWithConfigure = &githubIssueLabelsDataSource{}
+)
 
-		Schema: map[string]*schema.Schema{
-			"repository": {
-				Type:     schema.TypeString,
-				Required: true,
+type githubIssueLabelsDataSource struct {
+	client *Owner
+}
+
+type githubLabelModel struct {
+	Name        types.String `tfsdk:"name"`
+	Color       types.String `tfsdk:"color"`
+	Description types.String `tfsdk:"description"`
+	URL         types.String `tfsdk:"url"`
+}
+
+type githubIssueLabelsDataSourceModel struct {
+	ID         types.String       `tfsdk:"id"`
+	Repository types.String       `tfsdk:"repository"`
+	Labels     []githubLabelModel `tfsdk:"labels"`
+}
+
+func NewGithubIssueLabelsDataSource() datasource.DataSource {
+	return &githubIssueLabelsDataSource{}
+}
+
+func (d *githubIssueLabelsDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_issue_labels"
+}
+
+func (d *githubIssueLabelsDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Description: "Get the labels for a given repository.",
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				Description: "The ID of the data source.",
+				Computed:    true,
 			},
-			"labels": {
-				Type:     schema.TypeList,
-				Computed: true,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"name": {
-							Type:     schema.TypeString,
-							Computed: true,
+			"repository": schema.StringAttribute{
+				Description: "The repository name.",
+				Required:    true,
+			},
+			"labels": schema.ListNestedAttribute{
+				Description: "List of labels in the repository.",
+				Computed:    true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"name": schema.StringAttribute{
+							Description: "The name of the label.",
+							Computed:    true,
 						},
-						"color": {
-							Type:     schema.TypeString,
-							Computed: true,
+						"color": schema.StringAttribute{
+							Description: "The color of the label (without the leading #).",
+							Computed:    true,
 						},
-						"description": {
-							Type:     schema.TypeString,
-							Computed: true,
+						"description": schema.StringAttribute{
+							Description: "A short description of the label.",
+							Computed:    true,
 						},
-						"url": {
-							Type:     schema.TypeString,
-							Computed: true,
+						"url": schema.StringAttribute{
+							Description: "The URL of the label.",
+							Computed:    true,
 						},
 					},
 				},
@@ -46,63 +81,77 @@ func dataSourceGithubIssueLabels() *schema.Resource {
 	}
 }
 
-func dataSourceGithubIssueLabelsRead(d *schema.ResourceData, meta any) error {
-	client := meta.(*Owner).v3client
-	owner := meta.(*Owner).name
-	repository := d.Get("repository").(string)
+func (d *githubIssueLabelsDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
+	}
 
-	ctx := context.Background()
+	client, ok := req.ProviderData.(*Owner)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Data Source Configure Type",
+			"Expected *github.Owner, got: %T. Please report this issue to the provider developers.",
+		)
+		return
+	}
+
+	d.client = client
+}
+
+func (d *githubIssueLabelsDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	var data githubIssueLabelsDataSourceModel
+
+	// Read configuration
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	owner := d.client.Name()
+	repository := data.Repository.ValueString()
+
 	opts := &github.ListOptions{
 		PerPage: maxPerPage,
 	}
 
-	d.SetId(repository)
+	var allLabels []githubLabelModel
 
-	allLabels := make([]any, 0)
 	for {
-		labels, resp, err := client.Issues.ListLabels(ctx, owner, repository, opts)
+		labels, apiResp, err := d.client.V3Client().Issues.ListLabels(ctx, owner, repository, opts)
 		if err != nil {
-			return err
+			resp.Diagnostics.AddError(
+				"Unable to Read GitHub Issue Labels",
+				fmt.Sprintf("Unable to read GitHub Labels (Owner: %q/Repository: %q): %s", owner, repository, err.Error()),
+			)
+			return
 		}
 
-		result, err := flattenLabels(labels)
-		if err != nil {
-			return fmt.Errorf("unable to flatten GitHub Labels (Owner: %q/Repository: %q) : %+v", owner, repository, err)
+		for _, label := range labels {
+			labelModel := githubLabelModel{
+				Name:        types.StringValue(label.GetName()),
+				Color:       types.StringValue(label.GetColor()),
+				Description: types.StringValue(label.GetDescription()),
+				URL:         types.StringValue(label.GetURL()),
+			}
+			allLabels = append(allLabels, labelModel)
 		}
 
-		allLabels = append(allLabels, result...)
-
-		if resp.NextPage == 0 {
+		if apiResp.NextPage == 0 {
 			break
 		}
-		opts.Page = resp.NextPage
+		opts.Page = apiResp.NextPage
 	}
 
-	err := d.Set("labels", allLabels)
-	if err != nil {
-		return err
-	}
+	// Set the results
+	data.Labels = allLabels
+	data.ID = types.StringValue(repository)
 
-	return nil
-}
+	tflog.Debug(ctx, "Read GitHub issue labels", map[string]any{
+		"owner":      owner,
+		"repository": repository,
+		"count":      len(allLabels),
+	})
 
-func flattenLabels(labels []*github.Label) ([]any, error) {
-	if labels == nil {
-		return make([]any, 0), nil
-	}
-
-	results := make([]any, 0)
-
-	for _, l := range labels {
-		result := make(map[string]any)
-
-		result["name"] = l.GetName()
-		result["color"] = l.GetColor()
-		result["description"] = l.GetDescription()
-		result["url"] = l.GetURL()
-
-		results = append(results, result)
-	}
-
-	return results, nil
+	// Save data into Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

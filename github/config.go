@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"crypto/tls"
 	"net/http"
 	"net/url"
 	"path"
@@ -10,7 +11,6 @@ import (
 	"time"
 
 	"github.com/google/go-github/v74/github"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/logging"
 	"github.com/shurcooL/githubv4"
 	"golang.org/x/oauth2"
 )
@@ -37,6 +37,26 @@ type Owner struct {
 	IsOrganization bool
 }
 
+// V3Client returns the GitHub v3 REST API client
+func (o *Owner) V3Client() *github.Client {
+	return o.v3client
+}
+
+// V4Client returns the GitHub v4 GraphQL API client
+func (o *Owner) V4Client() *githubv4.Client {
+	return o.v4client
+}
+
+// Name returns the owner name
+func (o *Owner) Name() string {
+	return o.name
+}
+
+// ID returns the owner ID
+func (o *Owner) ID() int64 {
+	return o.id
+}
+
 // GHECDataResidencyMatch is a regex to match a GitHub Enterprise Cloud data residency URL:
 // https://[hostname].ghe.com instances expect paths that behave similar to GitHub.com, not GitHub Enterprise Server.
 var GHECDataResidencyMatch = regexp.MustCompile(`^https:\/\/[a-zA-Z0-9.\-]*\.ghe\.com$`)
@@ -45,7 +65,6 @@ func RateLimitedHTTPClient(client *http.Client, writeDelay time.Duration, readDe
 
 	client.Transport = NewEtagTransport(client.Transport)
 	client.Transport = NewRateLimitTransport(client.Transport, WithWriteDelay(writeDelay), WithReadDelay(readDelay), WithParallelRequests(parallelRequests))
-	client.Transport = logging.NewSubsystemLoggingHTTPTransport("GitHub", client.Transport)
 	client.Transport = newPreviewHeaderInjectorTransport(map[string]string{
 		// TODO: remove when Stone Crop preview is moved to general availability in the GraphQL API
 		"Accept": "application/vnd.github.stone-crop-preview+json",
@@ -64,9 +83,27 @@ func (c *Config) AuthenticatedHTTPClient() *http.Client {
 	ts := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: c.Token},
 	)
-	client := oauth2.NewClient(ctx, ts)
 
-	return RateLimitedHTTPClient(client, c.WriteDelay, c.ReadDelay, c.RetryDelay, c.ParallelRequests, c.RetryableErrors, c.MaxRetries)
+	// Create base client with optional insecure TLS configuration
+	var baseClient *http.Client
+	if c.Insecure {
+		transport := &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		}
+		client := oauth2.NewClient(ctx, ts)
+		// Replace the transport with our insecure one while preserving oauth2 functionality
+		client.Transport = &oauth2.Transport{
+			Source: ts,
+			Base:   transport,
+		}
+		baseClient = client
+	} else {
+		baseClient = oauth2.NewClient(ctx, ts)
+	}
+
+	return RateLimitedHTTPClient(baseClient, c.WriteDelay, c.ReadDelay, c.RetryDelay, c.ParallelRequests, c.RetryableErrors, c.MaxRetries)
 }
 
 func (c *Config) Anonymous() bool {
@@ -74,7 +111,18 @@ func (c *Config) Anonymous() bool {
 }
 
 func (c *Config) AnonymousHTTPClient() *http.Client {
-	client := &http.Client{Transport: &http.Transport{}}
+	var transport *http.Transport
+	if c.Insecure {
+		transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		}
+	} else {
+		transport = &http.Transport{}
+	}
+
+	client := &http.Client{Transport: transport}
 	return RateLimitedHTTPClient(client, c.WriteDelay, c.ReadDelay, c.RetryDelay, c.ParallelRequests, c.RetryableErrors, c.MaxRetries)
 }
 
@@ -142,7 +190,6 @@ func (c *Config) ConfigureOwner(owner *Owner) (*Owner, error) {
 }
 
 // Meta returns the meta parameter that is passed into subsequent resources
-// https://godoc.org/github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema#ConfigureFunc
 func (c *Config) Meta() (any, error) {
 
 	var client *http.Client

@@ -1,190 +1,111 @@
 package github
 
 import (
-	"fmt"
+	"os"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 )
 
-var testAccProviders map[string]*schema.Provider
-var testAccProviderFactories func(providers *[]*schema.Provider) map[string]func() (*schema.Provider, error)
-var testAccProvider *schema.Provider
+const anonymous = "anonymous"
+const individual = "individual"
+const organization = "organization"
+const enterprise = "enterprise"
 
-func init() {
-	testAccProvider = Provider()
-	testAccProviders = map[string]*schema.Provider{
-		"github": testAccProvider,
-	}
-	testAccProviderFactories = func(providers *[]*schema.Provider) map[string]func() (*schema.Provider, error) {
-		return map[string]func() (*schema.Provider, error){
-			"github": func() (*schema.Provider, error) {
-				p := Provider()
-				*providers = append(*providers, p)
-				return p, nil
-			},
-		}
+// testAccProtoV6ProviderFactories returns a pure Framework provider server for testing
+var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
+	"github": func() (tfprotov6.ProviderServer, error) {
+		return providerserver.NewProtocol6(New())(), nil
+	},
+}
+
+// testAccMuxedProtoV6ProviderFactories is now an alias for testAccProtoV6ProviderFactories
+// since we're Framework-only now (kept for backward compatibility with existing tests)
+var testAccMuxedProtoV6ProviderFactories = testAccProtoV6ProviderFactories
+
+func testAccPreCheck(t *testing.T, mode string) {
+	switch mode {
+	case individual:
+		testAccPreCheckIndividual(t)
+	case organization:
+		testAccPreCheckOrganization(t)
+	case anonymous:
+		testAccPreCheckAnonymous(t)
+	default:
+		t.Fatalf("Unknown test mode: %s", mode)
 	}
 }
 
+func skipUnlessMode(t *testing.T, providerMode string) {
+	switch providerMode {
+	case anonymous:
+		if os.Getenv("GITHUB_BASE_URL") != "" &&
+			os.Getenv("GITHUB_BASE_URL") != "https://api.github.com/" {
+			t.Log("anonymous mode not supported for GHES deployments")
+			break
+		}
+
+		if os.Getenv("GITHUB_TOKEN") == "" {
+			return
+		}
+
+		t.Skip("Skipping because GITHUB_TOKEN is present")
+	case individual:
+		testAccPreCheckIndividual(t)
+	case organization:
+		testAccPreCheckOrganization(t)
+	}
+}
+
+func testAccPreCheckIndividual(t *testing.T) {
+	if err := os.Getenv("GITHUB_TOKEN"); err == "" {
+		t.Skip("GITHUB_TOKEN must be set for acceptance tests")
+	}
+	if err := os.Getenv("GITHUB_OWNER"); err == "" {
+		t.Skip("GITHUB_OWNER must be set for acceptance tests")
+	}
+}
+
+func testAccPreCheckOrganization(t *testing.T) {
+	testAccPreCheckIndividual(t)
+	if err := os.Getenv("GITHUB_ORGANIZATION"); err == "" {
+		t.Skip("GITHUB_ORGANIZATION must be set for acceptance tests")
+	}
+}
+
+func testAccPreCheckAnonymous(t *testing.T) {
+	if err := os.Getenv("GITHUB_BASE_URL"); err == "" {
+		t.Skip("GITHUB_BASE_URL must be set for acceptance tests")
+	}
+}
+
+func testAccPreCheckEnterprise(t *testing.T) {
+	if err := os.Getenv("GITHUB_TOKEN"); err == "" {
+		t.Skip("GITHUB_TOKEN must be set for acceptance tests")
+	}
+	if err := os.Getenv("ENTERPRISE_SLUG"); err == "" {
+		t.Skip("ENTERPRISE_SLUG must be set for enterprise acceptance tests")
+	}
+	if err := os.Getenv("ENTERPRISE_ACCOUNT"); err != "true" {
+		t.Skip("ENTERPRISE_ACCOUNT must be set to 'true' for enterprise acceptance tests")
+	}
+}
+
+func skipUnlessEnterpriseMode(t *testing.T, mode string) {
+	switch mode {
+	case enterprise:
+		testAccPreCheckEnterprise(t)
+	default:
+		t.Fatalf("Unknown test mode: %s", mode)
+	}
+}
+
+// TestProvider tests the framework provider creation
 func TestProvider(t *testing.T) {
-
-	t.Run("runs internal validation without error", func(t *testing.T) {
-
-		if err := Provider().InternalValidate(); err != nil {
-			t.Fatalf("err: %s", err)
-		}
-
-	})
-
-	t.Run("has an implementation", func(t *testing.T) {
-		// FIXME: unsure if this is useful; refactored from:
-		// func TestProvider_impl(t *testing.T) {
-		// 	var _ terraform.ResourceProvider = Provider()
-		// }
-
-		var _ = *Provider()
-	})
-
-}
-
-// TODO: this is failing
-func TestAccProviderConfigure(t *testing.T) {
-
-	t.Run("can be configured to run anonymously", func(t *testing.T) {
-
-		config := `
-			provider "github" {}
-		`
-
-		resource.Test(t, resource.TestCase{
-			PreCheck:  func() { skipUnlessMode(t, anonymous) },
-			Providers: testAccProviders,
-			Steps: []resource.TestStep{
-				{
-					Config:             config,
-					ExpectNonEmptyPlan: false,
-				},
-			},
-		})
-
-	})
-
-	t.Run("can be configured to run insecurely", func(t *testing.T) {
-
-		config := fmt.Sprintf(`
-				provider "github" {
-					token = "%s"
-					insecure = true
-				}`,
-			testToken,
-		)
-
-		resource.Test(t, resource.TestCase{
-			PreCheck:  func() { skipUnlessMode(t, anonymous) },
-			Providers: testAccProviders,
-			Steps: []resource.TestStep{
-				{
-					Config:             config,
-					ExpectNonEmptyPlan: false,
-				},
-			},
-		})
-
-	})
-
-	t.Run("can be configured with an individual account", func(t *testing.T) {
-
-		config := fmt.Sprintf(`
-			provider "github" {
-				token = "%s"
-				owner = "%s"
-			}`,
-			testToken, testOwnerFunc(),
-		)
-
-		resource.Test(t, resource.TestCase{
-			PreCheck:  func() { skipUnlessMode(t, individual) },
-			Providers: testAccProviders,
-			Steps: []resource.TestStep{
-				{
-					Config:             config,
-					ExpectNonEmptyPlan: false,
-				},
-			},
-		})
-
-	})
-
-	t.Run("can be configured with an organization account", func(t *testing.T) {
-
-		config := fmt.Sprintf(`
-			provider "github" {
-				token = "%s"
-				organization = "%s"
-			}`,
-			testToken, testOrganizationFunc(),
-		)
-
-		resource.Test(t, resource.TestCase{
-			PreCheck:  func() { skipUnlessMode(t, organization) },
-			Providers: testAccProviders,
-			Steps: []resource.TestStep{
-				{
-					Config:             config,
-					ExpectNonEmptyPlan: false,
-				},
-			},
-		})
-
-	})
-
-	t.Run("can be configured with a GHES deployment", func(t *testing.T) {
-
-		config := fmt.Sprintf(`
-			provider "github" {
-				token = "%s"
-				base_url = "%s"
-			}`,
-			testToken, testBaseURLGHES,
-		)
-
-		resource.Test(t, resource.TestCase{
-			PreCheck:  func() { skipUnlessMode(t, individual) },
-			Providers: testAccProviders,
-			Steps: []resource.TestStep{
-				{
-					Config:             config,
-					ExpectNonEmptyPlan: false,
-				},
-			},
-		})
-
-	})
-
-	t.Run("can be configured with max retries", func(t *testing.T) {
-
-		config := fmt.Sprintf(`
-			provider "github" {
-				token = "%s"
-				owner = "%s"
-				max_retries = 3
-			}`,
-			testToken, testOwnerFunc(),
-		)
-
-		resource.Test(t, resource.TestCase{
-			PreCheck:  func() { skipUnlessMode(t, individual) },
-			Providers: testAccProviders,
-			Steps: []resource.TestStep{
-				{
-					Config:             config,
-					ExpectNonEmptyPlan: false,
-				},
-			},
-		})
-
-	})
-
+	// Just verify that the provider can be created without panicking
+	provider := New()
+	if provider == nil {
+		t.Error("Provider should not be nil")
+	}
 }

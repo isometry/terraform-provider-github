@@ -1,11 +1,27 @@
 package main
 
 import (
-	"github.com/hashicorp/terraform-plugin-sdk/v2/plugin"
+	"context"
+	"flag"
+	"log"
+
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+
 	"github.com/isometry/terraform-provider-github/v7/github"
 )
 
 func main() {
-	plugin.Serve(&plugin.ServeOpts{
-		ProviderFunc: github.Provider})
+	var debug bool
+	flag.BoolVar(&debug, "debug", false, "set to true to run the provider with support for debuggers")
+	flag.Parse()
+
+	opts := providerserver.ServeOpts{
+		Address: "registry.terraform.io/isometry/github",
+		Debug:   debug,
+	}
+
+	err := providerserver.Serve(context.Background(), github.New, opts)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
 }

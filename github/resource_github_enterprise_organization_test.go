@@ -6,8 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 )
 
 func TestAccGithubEnterpriseOrganization(t *testing.T) {
@@ -70,8 +71,8 @@ func TestAccGithubEnterpriseOrganization(t *testing.T) {
 
 		testCase := func(t *testing.T, mode string) {
 			resource.Test(t, resource.TestCase{
-				PreCheck:  func() { skipUnlessMode(t, mode) },
-				Providers: testAccProviders,
+				PreCheck:                 func() { skipUnlessEnterpriseMode(t, mode) },
+				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 				Steps: []resource.TestStep{
 					{
 						Config: config,
@@ -88,12 +89,6 @@ func TestAccGithubEnterpriseOrganization(t *testing.T) {
 		}
 
 		t.Run("with an enterprise account", func(t *testing.T) {
-			if isEnterprise != "true" {
-				t.Skip("Skipping because `ENTERPRISE_ACCOUNT` is not set or set to false")
-			}
-			if testEnterprise == "" {
-				t.Skip("Skipping because `ENTERPRISE_SLUG` is not set")
-			}
 			testCase(t, enterprise)
 		})
 	})
@@ -123,8 +118,8 @@ func TestAccGithubEnterpriseOrganization(t *testing.T) {
 
 		testCase := func(t *testing.T, mode string) {
 			resource.Test(t, resource.TestCase{
-				PreCheck:  func() { skipUnlessMode(t, mode) },
-				Providers: testAccProviders,
+				PreCheck:                 func() { skipUnlessEnterpriseMode(t, mode) },
+				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 				Steps: []resource.TestStep{
 					{
 						Config:  config,
@@ -135,12 +130,6 @@ func TestAccGithubEnterpriseOrganization(t *testing.T) {
 		}
 
 		t.Run("with an enterprise account", func(t *testing.T) {
-			if isEnterprise != "true" {
-				t.Skip("Skipping because `ENTERPRISE_ACCOUNT` is not set or set to false")
-			}
-			if testEnterprise == "" {
-				t.Skip("Skipping because `ENTERPRISE_SLUG` is not set")
-			}
 			testCase(t, enterprise)
 		})
 	})
@@ -216,8 +205,8 @@ func TestAccGithubEnterpriseOrganization(t *testing.T) {
 
 		testCase := func(t *testing.T, mode string) {
 			resource.Test(t, resource.TestCase{
-				PreCheck:  func() { skipUnlessMode(t, mode) },
-				Providers: testAccProviders,
+				PreCheck:                 func() { skipUnlessEnterpriseMode(t, mode) },
+				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 				Steps: []resource.TestStep{
 					{
 						Config: config,
@@ -237,12 +226,6 @@ func TestAccGithubEnterpriseOrganization(t *testing.T) {
 		}
 
 		t.Run("with an enterprise account", func(t *testing.T) {
-			if isEnterprise != "true" {
-				t.Skip("Skipping because `ENTERPRISE_ACCOUNT` is not set or set to false")
-			}
-			if testEnterprise == "" {
-				t.Skip("Skipping because `ENTERPRISE_SLUG` is not set")
-			}
 			testCase(t, enterprise)
 		})
 
@@ -361,8 +344,8 @@ func TestAccGithubEnterpriseOrganization(t *testing.T) {
 
 		testCase := func(t *testing.T, mode string) {
 			resource.Test(t, resource.TestCase{
-				PreCheck:  func() { skipUnlessMode(t, mode) },
-				Providers: testAccProviders,
+				PreCheck:                 func() { skipUnlessEnterpriseMode(t, mode) },
+				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 				Steps: []resource.TestStep{
 					{
 						Config: configWithoutDisplayName,
@@ -396,12 +379,6 @@ func TestAccGithubEnterpriseOrganization(t *testing.T) {
 		}
 
 		t.Run("with an enterprise account", func(t *testing.T) {
-			if isEnterprise != "true" {
-				t.Skip("Skipping because `ENTERPRISE_ACCOUNT` is not set or set to false")
-			}
-			if testEnterprise == "" {
-				t.Skip("Skipping because `ENTERPRISE_SLUG` is not set")
-			}
 			testCase(t, enterprise)
 		})
 
@@ -434,8 +411,8 @@ func TestAccGithubEnterpriseOrganization(t *testing.T) {
 
 		testCase := func(t *testing.T, mode string) {
 			resource.Test(t, resource.TestCase{
-				PreCheck:  func() { skipUnlessMode(t, mode) },
-				Providers: testAccProviders,
+				PreCheck:                 func() { skipUnlessEnterpriseMode(t, mode) },
+				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 				Steps: []resource.TestStep{
 					{
 						Config: config,
@@ -452,12 +429,6 @@ func TestAccGithubEnterpriseOrganization(t *testing.T) {
 		}
 
 		t.Run("with an enterprise account", func(t *testing.T) {
-			if isEnterprise != "true" {
-				t.Skip("Skipping because `ENTERPRISE_ACCOUNT` is not set or set to false")
-			}
-			if testEnterprise == "" {
-				t.Skip("Skipping because `ENTERPRISE_SLUG` is not set")
-			}
 			testCase(t, enterprise)
 		})
 	})
@@ -490,8 +461,8 @@ func TestAccGithubEnterpriseOrganization(t *testing.T) {
 
 		testCase := func(t *testing.T, mode string) {
 			resource.Test(t, resource.TestCase{
-				PreCheck:  func() { skipUnlessMode(t, mode) },
-				Providers: testAccProviders,
+				PreCheck:                 func() { skipUnlessEnterpriseMode(t, mode) },
+				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 				Steps: []resource.TestStep{
 					{
 						Config: config,
@@ -508,12 +479,6 @@ func TestAccGithubEnterpriseOrganization(t *testing.T) {
 		}
 
 		t.Run("with an enterprise account", func(t *testing.T) {
-			if isEnterprise != "true" {
-				t.Skip("Skipping because `ENTERPRISE_ACCOUNT` is not set or set to false")
-			}
-			if testEnterprise == "" {
-				t.Skip("Skipping because `ENTERPRISE_SLUG` is not set")
-			}
 			testCase(t, enterprise)
 		})
 
@@ -547,8 +512,8 @@ func TestAccGithubEnterpriseOrganization(t *testing.T) {
 
 		testCase := func(t *testing.T, mode string) {
 			resource.Test(t, resource.TestCase{
-				PreCheck:  func() { skipUnlessMode(t, mode) },
-				Providers: testAccProviders,
+				PreCheck:                 func() { skipUnlessEnterpriseMode(t, mode) },
+				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 				Steps: []resource.TestStep{
 					{
 						Config: config,
@@ -565,14 +530,72 @@ func TestAccGithubEnterpriseOrganization(t *testing.T) {
 		}
 
 		t.Run("with an enterprise account", func(t *testing.T) {
-			if isEnterprise != "true" {
-				t.Skip("Skipping because `ENTERPRISE_ACCOUNT` is not set or set to false")
-			}
-			if testEnterprise == "" {
-				t.Skip("Skipping because `ENTERPRISE_SLUG` is not set")
-			}
 			testCase(t, enterprise)
 		})
 
+	})
+
+	// Test for migration compatibility - ensures no changes when switching from SDKv2 to Framework
+	t.Run("migration compatibility test", func(t *testing.T) {
+		randomID := acctest.RandStringFromCharSet(5, acctest.CharSetAlphaNum)
+		orgName := fmt.Sprintf("tf-acc-test-migration-%s", randomID)
+
+		desc := "Migration test description"
+		displayName := fmt.Sprintf("Migration Test %s", randomID)
+
+		config := fmt.Sprintf(`
+		  data "github_enterprise" "enterprise" {
+			slug = "%s"
+		  }
+
+		  data "github_user" "current" {
+			username = ""
+		  }
+
+		  resource "github_enterprise_organization" "org" {
+			enterprise_id = data.github_enterprise.enterprise.id
+			name          = "%s"
+			display_name  = "%s"
+			description   = "%s"
+			billing_email = data.github_user.current.email
+			admin_logins  = [
+			  data.github_user.current.login
+			]
+		  }
+		`, testEnterprise, orgName, displayName, desc)
+
+		testCase := func(t *testing.T, mode string) {
+			resource.Test(t, resource.TestCase{
+				PreCheck: func() { skipUnlessEnterpriseMode(t, mode) },
+				Steps: []resource.TestStep{
+					// First create the resource with the muxed provider (which uses SDKv2 for this resource initially)
+					{
+						ProtoV6ProviderFactories: testAccMuxedProtoV6ProviderFactories,
+						Config:                   config,
+						Check: resource.ComposeTestCheckFunc(
+							resource.TestCheckResourceAttr("github_enterprise_organization.org", "name", orgName),
+							resource.TestCheckResourceAttr("github_enterprise_organization.org", "description", desc),
+							resource.TestCheckResourceAttr("github_enterprise_organization.org", "display_name", displayName),
+							resource.TestCheckResourceAttrSet("github_enterprise_organization.org", "id"),
+							resource.TestCheckResourceAttrSet("github_enterprise_organization.org", "database_id"),
+						),
+					},
+					// Then switch to pure Framework provider - should be no-op plan
+					{
+						ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+						Config:                   config,
+						ConfigPlanChecks: resource.ConfigPlanChecks{
+							PreApply: []plancheck.PlanCheck{
+								plancheck.ExpectEmptyPlan(),
+							},
+						},
+					},
+				},
+			})
+		}
+
+		t.Run("with an enterprise account", func(t *testing.T) {
+			testCase(t, enterprise)
+		})
 	})
 }

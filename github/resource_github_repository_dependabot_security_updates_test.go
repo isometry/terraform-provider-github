@@ -5,31 +5,27 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-func TestAccGithubAutomatedSecurityFixes(t *testing.T) {
-
+func TestAccGithubRepositoryDependabotSecurityUpdatesResource_basic(t *testing.T) {
 	randomID := acctest.RandStringFromCharSet(5, acctest.CharSetAlphaNum)
 
 	t.Run("enables automated security fixes without error", func(t *testing.T) {
-
 		enabled := "enabled = false"
 		updatedEnabled := "enabled = true"
 		config := fmt.Sprintf(`
-
 			resource "github_repository" "test" {
 				name = "tf-acc-test-%s"
 				visibility = "private"
-			  	auto_init = true
-				vulnerability_alerts   = true
+				auto_init = true
+				vulnerability_alerts = true
 			}
 
-
 			resource "github_repository_dependabot_security_updates" "test" {
-			  repository  = github_repository.test.id
-			  %s
+				repository = github_repository.test.id
+				%s
 			}
 		`, randomID, enabled)
 
@@ -39,29 +35,37 @@ func TestAccGithubAutomatedSecurityFixes(t *testing.T) {
 					"github_repository_dependabot_security_updates.test", "enabled",
 					"false",
 				),
+				resource.TestCheckResourceAttr(
+					"github_repository_dependabot_security_updates.test", "repository",
+					fmt.Sprintf("tf-acc-test-%s", randomID),
+				),
+				resource.TestCheckResourceAttrSet("github_repository_dependabot_security_updates.test", "id"),
 			),
 			"after": resource.ComposeTestCheckFunc(
 				resource.TestCheckResourceAttr(
 					"github_repository_dependabot_security_updates.test", "enabled",
 					"true",
 				),
+				resource.TestCheckResourceAttr(
+					"github_repository_dependabot_security_updates.test", "repository",
+					fmt.Sprintf("tf-acc-test-%s", randomID),
+				),
+				resource.TestCheckResourceAttrSet("github_repository_dependabot_security_updates.test", "id"),
 			),
 		}
 
 		testCase := func(t *testing.T, mode string) {
 			resource.Test(t, resource.TestCase{
-				PreCheck:  func() { skipUnlessMode(t, mode) },
-				Providers: testAccProviders,
+				PreCheck:                 func() { testAccPreCheck(t, mode) },
+				ProtoV6ProviderFactories: testAccMuxedProtoV6ProviderFactories,
 				Steps: []resource.TestStep{
 					{
 						Config: config,
 						Check:  checks["before"],
 					},
 					{
-						Config: strings.Replace(config,
-							enabled,
-							updatedEnabled, 1),
-						Check: checks["after"],
+						Config: strings.Replace(config, enabled, updatedEnabled, 1),
+						Check:  checks["after"],
 					},
 				},
 			})
@@ -81,23 +85,20 @@ func TestAccGithubAutomatedSecurityFixes(t *testing.T) {
 	})
 
 	t.Run("disables automated security fixes without error", func(t *testing.T) {
-
 		enabled := "enabled = true"
 		updatedEnabled := "enabled = false"
 
 		config := fmt.Sprintf(`
-
 			resource "github_repository" "test" {
 				name = "tf-acc-test-%s"
 				visibility = "private"
-			  	auto_init = true
-				vulnerability_alerts   = true
+				auto_init = true
+				vulnerability_alerts = true
 			}
 
-
 			resource "github_repository_dependabot_security_updates" "test" {
-			  repository  = github_repository.test.id
-			  %s
+				repository = github_repository.test.id
+				%s
 			}
 		`, randomID, enabled)
 
@@ -107,29 +108,37 @@ func TestAccGithubAutomatedSecurityFixes(t *testing.T) {
 					"github_repository_dependabot_security_updates.test", "enabled",
 					"true",
 				),
+				resource.TestCheckResourceAttr(
+					"github_repository_dependabot_security_updates.test", "repository",
+					fmt.Sprintf("tf-acc-test-%s", randomID),
+				),
+				resource.TestCheckResourceAttrSet("github_repository_dependabot_security_updates.test", "id"),
 			),
 			"after": resource.ComposeTestCheckFunc(
 				resource.TestCheckResourceAttr(
 					"github_repository_dependabot_security_updates.test", "enabled",
 					"false",
 				),
+				resource.TestCheckResourceAttr(
+					"github_repository_dependabot_security_updates.test", "repository",
+					fmt.Sprintf("tf-acc-test-%s", randomID),
+				),
+				resource.TestCheckResourceAttrSet("github_repository_dependabot_security_updates.test", "id"),
 			),
 		}
 
 		testCase := func(t *testing.T, mode string) {
 			resource.Test(t, resource.TestCase{
-				PreCheck:  func() { skipUnlessMode(t, mode) },
-				Providers: testAccProviders,
+				PreCheck:                 func() { testAccPreCheck(t, mode) },
+				ProtoV6ProviderFactories: testAccMuxedProtoV6ProviderFactories,
 				Steps: []resource.TestStep{
 					{
 						Config: config,
 						Check:  checks["before"],
 					},
 					{
-						Config: strings.Replace(config,
-							enabled,
-							updatedEnabled, 1),
-						Check: checks["after"],
+						Config: strings.Replace(config, enabled, updatedEnabled, 1),
+						Check:  checks["after"],
 					},
 				},
 			})
@@ -151,26 +160,27 @@ func TestAccGithubAutomatedSecurityFixes(t *testing.T) {
 	t.Run("imports automated security fixes without error", func(t *testing.T) {
 		config := fmt.Sprintf(`
 			resource "github_repository" "test" {
-			  name = "tf-acc-test-%s"
-			  vulnerability_alerts   = true
+				name = "tf-acc-test-%s"
+				vulnerability_alerts = true
 			}
 
 			resource "github_repository_dependabot_security_updates" "test" {
-			  repository  = github_repository.test.id
-			  enabled = false
+				repository = github_repository.test.id
+				enabled = false
 			}
-    `, randomID)
+		`, randomID)
 
 		check := resource.ComposeTestCheckFunc(
 			resource.TestCheckResourceAttrSet("github_repository_dependabot_security_updates.test", "repository"),
 			resource.TestCheckResourceAttrSet("github_repository_dependabot_security_updates.test", "enabled"),
 			resource.TestCheckResourceAttr("github_repository_dependabot_security_updates.test", "enabled", "false"),
+			resource.TestCheckResourceAttrSet("github_repository_dependabot_security_updates.test", "id"),
 		)
 
 		testCase := func(t *testing.T, mode string) {
 			resource.Test(t, resource.TestCase{
-				PreCheck:  func() { skipUnlessMode(t, mode) },
-				Providers: testAccProviders,
+				PreCheck:                 func() { testAccPreCheck(t, mode) },
+				ProtoV6ProviderFactories: testAccMuxedProtoV6ProviderFactories,
 				Steps: []resource.TestStep{
 					{
 						Config: config,
